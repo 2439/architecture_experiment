@@ -62,7 +62,6 @@ class BranchPredictor
 BranchPredictor* BP;
 
 
-
 /* ===================================================================== */
 /* 至少需实现2种动态预测方法                                               */
 /* ===================================================================== */
@@ -77,12 +76,54 @@ class BHTPredictor: public BranchPredictor
 
         BOOL predict(ADDRINT addr)
         {
-            // TODO:
+            return counter[truncate(addr, L)].isTaken();
         }
 
         void update(BOOL takenActually, BOOL takenPredicted, ADDRINT addr)
         {
-            // TODO:
+            UINT64 Tag = truncate(addr, L);
+
+            // 10->01
+            if(takenActually)
+            {
+                counter[Tag].increase();
+            }
+            else
+            {
+                counter[Tag].decrease();
+            }
+
+            // 10->00
+            // if(takenPredicted)
+            // {
+            //     if(takenActually)
+            //     {
+            //         counter[Tag].increase();
+            //     }
+            //     else
+            //     {
+            //         counter[Tag].decrease();
+            //         if(!counter[Tag].isTaken())
+            //         {
+            //             counter[Tag].decrease();
+            //         }
+            //     }
+            // }
+            // else
+            // {
+            //     if(takenActually)
+            //     {
+            //         counter[Tag].increase();
+            //         if(counter[Tag].isTaken())
+            //         {
+            //             counter[Tag].increase();
+            //         }
+            //     }
+            //     else
+            //     {
+            //         counter[Tag].decrease();
+            //     }
+            // }
         }
 };
 
@@ -93,7 +134,29 @@ class GlobalHistoryPredictor: public BranchPredictor
     SaturatingCnt<BITS> bhist[1 << L];  // PHT中的分支历史字段
     ShiftReg<H> GHR;
     
-    // TODO:
+    public:
+        GlobalHistoryPredictor() { }
+
+        BOOL predict(ADDRINT addr)
+        {
+            UINT64 Tag = truncate(addr ^ GHR.getVal(), L);
+            return bhist[Tag].isTaken();
+        }
+
+        void update(BOOL takenActually, BOOL takenPredicted, ADDRINT addr)
+        {
+            UINT64 Tag = truncate(addr ^ GHR.getVal(), L);
+
+            GHR.shiftIn(takenActually);
+            if(takenActually)
+            {
+                bhist[Tag].increase();
+            }
+            else
+            {
+                bhist[Tag].decrease();
+            }
+        }
 };
 
 // 3. Local-history-based branch predictor
@@ -103,7 +166,33 @@ class LocalHistoryPredictor: public BranchPredictor
     SaturatingCnt<BITS> bhist[1 << L];  // PHT中的分支历史字段
     ShiftReg<H> LHT[1 << HL];
 
-    // TODO:
+    public:
+    LocalHistoryPredictor() { }
+
+    BOOL predict(ADDRINT addr)
+    {
+        UINT64 LH = LHT[truncate(addr, HL)].getVal();
+        UINT64 Tag = truncate(addr ^ LH, L);
+        return bhist[Tag].isTaken();
+    }
+
+    void update(BOOL takenActually, BOOL takenPredicted, ADDRINT addr)
+    {
+        UINT64 LHTTag = truncate(addr, HL);
+        UINT64 Tag = truncate(addr ^ LHT[LHTTag].getVal(), L);
+
+        // LHT update
+        LHT[LHTTag].shiftIn(takenActually);
+        // PHT update
+        if(takenActually)
+        {
+            bhist[Tag].increase();
+        }
+        else
+        {
+            bhist[Tag].decrease();
+        }
+    }
 };
 
 /* ===================================================================== */
@@ -123,7 +212,38 @@ class TournamentPredictor_GSH: public BranchPredictor
             BPs[1] = BP1;
         }
 
-        // TODO:
+        BOOL predict(ADDRINT addr)
+        {
+            if(!GSHR.isTaken())
+            {
+                return BPs[0]->predict(addr);
+            }
+            else
+            {
+                return BPs[1]->predict(addr);
+            }
+        }
+
+        void update(BOOL takenActually, BOOL takenPredicted, ADDRINT addr)
+        {
+            BOOL result[2];
+            result[0] = BPs[0]->predict(addr);
+            result[1] = BPs[1]->predict(addr);
+
+            // BPs update
+            BPs[0]->update(takenActually, result[0], addr);
+            BPs[1]->update(takenActually, result[1], addr);
+
+            // GSHR update
+            if(result[0] == takenActually && result[1] != takenActually)
+            {
+                GSHR.decrease();
+            }
+            else if(result[0] != takenActually && result[1] == takenActually)
+            {
+                GSHR.increase();
+            }
+        }
 };
 
 // 2. Tournament predictor: Select output by local selection history
@@ -140,7 +260,40 @@ class TournamentPredictor_LSH: public BranchPredictor
             BPs[1] = BP1;
         }
 
-        // TODO:
+        BOOL predict(ADDRINT addr)
+        {
+            UINT64 Tag = truncate(addr, L);
+            if(!LSHT[Tag].isTaken())
+            {
+                return BPs[0]->predict(addr);
+            }
+            else
+            {
+                return BPs[1]->predict(addr);
+            }
+        }
+
+        void update(BOOL takenActually, BOOL takenPredicted, ADDRINT addr)
+        {
+            UINT64 Tag = truncate(addr, L);
+            BOOL result[2];
+            result[0] = BPs[0]->predict(addr);
+            result[1] = BPs[1]->predict(addr);
+
+            // BPs update
+            BPs[0]->update(takenActually, result[0], addr);
+            BPs[1]->update(takenActually, result[1], addr);
+
+            // LSHT update
+            if(result[0] == takenActually && result[1] != takenActually)
+            {
+                LSHT[Tag].decrease();
+            }
+            else if(result[0] != takenActually && result[1] == takenActually)
+            {
+                LSHT[Tag].increase();
+            }
+        }
 };
 
 // This function is called every time a control-flow instruction is encountered
@@ -221,7 +374,17 @@ INT32 Usage()
 int main(int argc, char * argv[])
 {
     // TODO: New your Predictor below.
-    // BP = new BranchPredictor();
+    // BP = new BHTPredictor<16>();
+    // BP = new GlobalHistoryPredictor<16, 16>();
+    // BP = new LocalHistoryPredictor<16, 16>();
+    // Tournament predictor: Select output by global selection history
+    // BranchPredictor* BP0 = new BHTPredictor<16>();
+    // BranchPredictor* BP1 = new GlobalHistoryPredictor<16, 16>();
+    // BP = new TournamentPredictor_GSH<2>(BP0, BP1);
+    // Tournament predictor: Select output by local selection history
+    BranchPredictor* BP0 = new BHTPredictor<16>();
+    BranchPredictor* BP1 = new GlobalHistoryPredictor<16, 16>();
+    BP = new TournamentPredictor_LSH<2>(BP0, BP1);
 
     // Initialize pin
     if (PIN_Init(argc, argv)) return Usage();
