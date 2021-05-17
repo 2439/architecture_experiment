@@ -195,6 +195,53 @@ class LocalHistoryPredictor: public BranchPredictor
     }
 };
 
+// 4. Bi-Mode branch predictor
+template<size_t L, size_t H, UINT64 BITS = 2>
+class BiModeHistoryPredictor: public BranchPredictor
+{
+    SaturatingCnt<BITS> directionTPHT[1 << L];
+    SaturatingCnt<BITS> directionNTPHT[1 << L];
+    SaturatingCnt<BITS> choosePHT[1 << L];
+    ShiftReg<H> GHR;
+
+    public:
+        BiModeHistoryPredictor() {}
+
+        BOOL predict(ADDRINT addr)
+        {
+            UINT64 directionTag = truncate(addr ^ GHR.getVal(), L);
+            if(choosePHT[truncate(addr, L)].isTaken())
+            {
+                return directionTPHT[directionTag].isTaken();
+            }
+            else
+            {
+                return directionNTPHT[directionTag].isTaken();
+            }
+        }
+
+        void update(BOOL takenActually, BOOL takenPredicted, ADDRINT addr)
+        {
+            UINT64 directionTag = truncate(addr ^ GHR.getVal(), L);
+            UINT64 chooseTag = truncate(addr, L);
+
+            // T被选中
+            if(choosePHT[chooseTag].isTaken())
+            {
+                
+                if(takenActually != takenPredicted && directionTPHT[directionTag].isTaken())
+                {
+                    chooseTag.
+                }
+            }
+            // NT被选中
+            else
+            {
+
+            }
+        }
+}
+
 /* ===================================================================== */
 /* 锦标赛预测器的选择机制可用全局法或局部法实现，二选一即可                   */
 /* ===================================================================== */
@@ -373,6 +420,7 @@ INT32 Usage()
 
 int main(int argc, char * argv[])
 {
+    // 19?????!!!!!!!!!!!!
     // TODO: New your Predictor below.
     // BP = new BHTPredictor<16>();
     // BP = new GlobalHistoryPredictor<16, 16>();
