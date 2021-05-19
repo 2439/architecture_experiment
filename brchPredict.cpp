@@ -204,43 +204,43 @@ class BiModeHistoryPredictor: public BranchPredictor
     SaturatingCnt<BITS> choosePHT[1 << L];
     ShiftReg<H> GHR;
 
-    public:
-        BiModeHistoryPredictor() {}
+    // public:
+    //     BiModeHistoryPredictor() {}
 
-        BOOL predict(ADDRINT addr)
-        {
-            UINT64 directionTag = truncate(addr ^ GHR.getVal(), L);
-            if(choosePHT[truncate(addr, L)].isTaken())
-            {
-                return directionTPHT[directionTag].isTaken();
-            }
-            else
-            {
-                return directionNTPHT[directionTag].isTaken();
-            }
-        }
+    //     BOOL predict(ADDRINT addr)
+    //     {
+    //         UINT64 directionTag = truncate(addr ^ GHR.getVal(), L);
+    //         if(choosePHT[truncate(addr, L)].isTaken())
+    //         {
+    //             return directionTPHT[directionTag].isTaken();
+    //         }
+    //         else
+    //         {
+    //             return directionNTPHT[directionTag].isTaken();
+    //         }
+    //     }
 
-        void update(BOOL takenActually, BOOL takenPredicted, ADDRINT addr)
-        {
-            UINT64 directionTag = truncate(addr ^ GHR.getVal(), L);
-            UINT64 chooseTag = truncate(addr, L);
+    //     void update(BOOL takenActually, BOOL takenPredicted, ADDRINT addr)
+    //     {
+    //         UINT64 directionTag = truncate(addr ^ GHR.getVal(), L);
+    //         UINT64 chooseTag = truncate(addr, L);
 
-            // T被选中
-            if(choosePHT[chooseTag].isTaken())
-            {
+    //         // T被选中
+    //         if(choosePHT[chooseTag].isTaken())
+    //         {
                 
-                if(takenActually != takenPredicted && directionTPHT[directionTag].isTaken())
-                {
-                    chooseTag.
-                }
-            }
-            // NT被选中
-            else
-            {
+    //             if(takenActually != takenPredicted && directionTPHT[directionTag].isTaken())
+    //             {
+    //                 chooseTag.
+    //             }
+    //         }
+    //         // NT被选中
+    //         else
+    //         {
 
-            }
-        }
-}
+    //         }
+    //     }
+};
 
 /* ===================================================================== */
 /* 锦标赛预测器的选择机制可用全局法或局部法实现，二选一即可                   */
@@ -422,17 +422,19 @@ int main(int argc, char * argv[])
 {
     // 19?????!!!!!!!!!!!!
     // TODO: New your Predictor below.
-    // BP = new BHTPredictor<16>();
-    // BP = new GlobalHistoryPredictor<16, 16>();
+    // BP = new BHTPredictor<19>();
+    BP = new GlobalHistoryPredictor<19, 19>();
     // BP = new LocalHistoryPredictor<16, 16>();
+
     // Tournament predictor: Select output by global selection history
     // BranchPredictor* BP0 = new BHTPredictor<16>();
     // BranchPredictor* BP1 = new GlobalHistoryPredictor<16, 16>();
     // BP = new TournamentPredictor_GSH<2>(BP0, BP1);
+
     // Tournament predictor: Select output by local selection history
-    BranchPredictor* BP0 = new BHTPredictor<16>();
-    BranchPredictor* BP1 = new GlobalHistoryPredictor<16, 16>();
-    BP = new TournamentPredictor_LSH<2>(BP0, BP1);
+    // BranchPredictor* BP0 = new BHTPredictor<16>();
+    // BranchPredictor* BP1 = new GlobalHistoryPredictor<16, 16>();
+    // BP = new TournamentPredictor_LSH<2>(BP0, BP1);
 
     // Initialize pin
     if (PIN_Init(argc, argv)) return Usage();
