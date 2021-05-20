@@ -173,6 +173,7 @@ class LocalHistoryPredictor: public BranchPredictor
     {
         UINT64 LH = LHT[truncate(addr, HL)].getVal();
         UINT64 Tag = truncate(addr ^ LH, L);
+        // printf("truncate:%ld LH:%ld Tag:%ld isTaken:%d\n", truncate(addr, H), LH, Tag, bhist[Tag].isTaken());
         return bhist[Tag].isTaken();
     }
 
@@ -204,42 +205,62 @@ class BiModeHistoryPredictor: public BranchPredictor
     SaturatingCnt<BITS> choosePHT[1 << L];
     ShiftReg<H> GHR;
 
-    // public:
-    //     BiModeHistoryPredictor() {}
+    public:
+        BiModeHistoryPredictor() {}
 
-    //     BOOL predict(ADDRINT addr)
-    //     {
-    //         UINT64 directionTag = truncate(addr ^ GHR.getVal(), L);
-    //         if(choosePHT[truncate(addr, L)].isTaken())
-    //         {
-    //             return directionTPHT[directionTag].isTaken();
-    //         }
-    //         else
-    //         {
-    //             return directionNTPHT[directionTag].isTaken();
-    //         }
-    //     }
+        BOOL predict(ADDRINT addr)
+        {
+            UINT64 directionTag = truncate(addr ^ GHR.getVal(), L);
+            if(choosePHT[truncate(addr, L)].isTaken())
+            {
+                return directionTPHT[directionTag].isTaken();
+            }
+            else
+            {
+                return directionNTPHT[directionTag].isTaken();
+            }
+        }
 
-    //     void update(BOOL takenActually, BOOL takenPredicted, ADDRINT addr)
-    //     {
-    //         UINT64 directionTag = truncate(addr ^ GHR.getVal(), L);
-    //         UINT64 chooseTag = truncate(addr, L);
+        void update(BOOL takenActually, BOOL takenPredicted, ADDRINT addr)
+        {
+            UINT64 directionTag = truncate(addr ^ GHR.getVal(), L);
+            UINT64 chooseTag = truncate(addr, L);
+            BOOL chooseTaken = choosePHT[chooseTag].isTaken();
+            BOOL chooseUpdate = !(takenActually != chooseTaken && takenActually == takenPredicted);
 
-    //         // T被选中
-    //         if(choosePHT[chooseTag].isTaken())
-    //         {
-                
-    //             if(takenActually != takenPredicted && directionTPHT[directionTag].isTaken())
-    //             {
-    //                 chooseTag.
-    //             }
-    //         }
-    //         // NT被选中
-    //         else
-    //         {
-
-    //         }
-    //     }
+            GHR.shiftIn(takenActually);
+            // 仅被选择的方向PHT更新，若选择PHT和结果不一致，而方向PHT和结果相同，则不更新选择PHT
+            if(takenActually)
+            {
+                if(chooseTaken)
+                {
+                    directionTPHT[directionTag].increase();
+                }
+                else
+                {
+                    directionNTPHT[directionTag].increase();
+                }
+                if(chooseUpdate)
+                {
+                    choosePHT[chooseTag].increase();
+                }
+            }
+            else
+            {
+                if(chooseTaken)
+                {
+                    directionTPHT[directionTag].decrease();
+                }
+                else
+                {
+                    directionNTPHT[directionTag].decrease();
+                }
+                if(chooseUpdate)
+                {
+                    choosePHT[chooseTag].decrease();
+                }
+            }
+        }
 };
 
 /* ===================================================================== */
@@ -420,21 +441,24 @@ INT32 Usage()
 
 int main(int argc, char * argv[])
 {
-    // 19?????!!!!!!!!!!!!
     // TODO: New your Predictor below.
-    // BP = new BHTPredictor<19>();
-    BP = new GlobalHistoryPredictor<19, 19>();
-    // BP = new LocalHistoryPredictor<16, 16>();
+    BP = new BHTPredictor<19>();
+    // BP = new GlobalHistoryPredictor<19, 19>();
+    // ????????????????????????H&HL
+    // BP = new LocalHistoryPredictor<19, 19>();
+    // BP = new BiModeHistoryPredictor<19, 19>();
 
     // Tournament predictor: Select output by global selection history
-    // BranchPredictor* BP0 = new BHTPredictor<16>();
-    // BranchPredictor* BP1 = new GlobalHistoryPredictor<16, 16>();
-    // BP = new TournamentPredictor_GSH<2>(BP0, BP1);
+    // BranchPredictor* BP0 = new BHTPredictor<19>();
+    // BranchPredictor* BP0 = new LocalHistoryPredictor<19, 19>();
+    // BranchPredictor* BP1 = new GlobalHistoryPredictor<19, 19>();
+    // BP = new TournamentPredictor_GSH<>(BP0, BP1);
 
     // Tournament predictor: Select output by local selection history
-    // BranchPredictor* BP0 = new BHTPredictor<16>();
-    // BranchPredictor* BP1 = new GlobalHistoryPredictor<16, 16>();
-    // BP = new TournamentPredictor_LSH<2>(BP0, BP1);
+    // BranchPredictor* BP0 = new BHTPredictor<19>();
+    // BranchPredictor* BP0 = new LocalHistoryPredictor<19, 19>();
+    // BranchPredictor* BP1 = new GlobalHistoryPredictor<19, 19>();
+    // BP = new TournamentPredictor_LSH<19>(BP0, BP1);
 
     // Initialize pin
     if (PIN_Init(argc, argv)) return Usage();
