@@ -442,7 +442,7 @@ INT32 Usage()
 int main(int argc, char * argv[])
 {
     // TODO: New your Predictor below.
-    // BP = new BHTPredictor<19>();
+    // BP = new BHTPredictor<20>();
     BP = new GlobalHistoryPredictor<20, 2>();
     // ????????????????????????H&HL
     // BP = new LocalHistoryPredictor<19, 19>();
