@@ -132,7 +132,7 @@ template<size_t L, size_t H, UINT64 BITS = 2>
 class GlobalHistoryPredictor: public BranchPredictor
 {
     SaturatingCnt<BITS> bhist[1 << L];  // PHT中的分支历史字段
-    ShiftReg<H> GHR;
+    ShiftReg<H> GHR;    // 全局历史
     
     public:
         GlobalHistoryPredictor() { }
@@ -164,7 +164,7 @@ template<size_t L, size_t H, size_t HL = 6, UINT64 BITS = 2>
 class LocalHistoryPredictor: public BranchPredictor
 {
     SaturatingCnt<BITS> bhist[1 << L];  // PHT中的分支历史字段
-    ShiftReg<H> LHT[1 << HL];
+    ShiftReg<H> LHT[1 << HL];   // 局部转移历史表
 
     public:
     LocalHistoryPredictor() { }
@@ -173,7 +173,6 @@ class LocalHistoryPredictor: public BranchPredictor
     {
         UINT64 LH = LHT[truncate(addr, HL)].getVal();
         UINT64 Tag = truncate(addr ^ LH, L);
-        // printf("truncate:%ld LH:%ld Tag:%ld isTaken:%d\n", truncate(addr, H), LH, Tag, bhist[Tag].isTaken());
         return bhist[Tag].isTaken();
     }
 
@@ -200,10 +199,10 @@ class LocalHistoryPredictor: public BranchPredictor
 template<size_t L, size_t H, UINT64 BITS = 2>
 class BiModeHistoryPredictor: public BranchPredictor
 {
-    SaturatingCnt<BITS> directionTPHT[1 << L];
-    SaturatingCnt<BITS> directionNTPHT[1 << L];
-    SaturatingCnt<BITS> choosePHT[1 << L];
-    ShiftReg<H> GHR;
+    SaturatingCnt<BITS> directionTPHT[1 << L];  // 跳转方向表
+    SaturatingCnt<BITS> directionNTPHT[1 << L]; // 不跳转方向表
+    SaturatingCnt<BITS> choosePHT[1 << L];      // 选择表
+    ShiftReg<H> GHR;                            // 全局历史
 
     public:
         BiModeHistoryPredictor() {}
@@ -270,8 +269,8 @@ class BiModeHistoryPredictor: public BranchPredictor
 template<UINT64 BITS = 2>
 class TournamentPredictor_GSH: public BranchPredictor
 {
-    SaturatingCnt<BITS> GSHR;
-    BranchPredictor* BPs[2];
+    SaturatingCnt<BITS> GSHR;   // 分支历史
+    BranchPredictor* BPs[2];    // 子预测器
 
     public:
         TournamentPredictor_GSH(BranchPredictor* BP0, BranchPredictor* BP1)
@@ -318,8 +317,8 @@ class TournamentPredictor_GSH: public BranchPredictor
 template<size_t L, UINT64 BITS = 2>
 class TournamentPredictor_LSH: public BranchPredictor
 {
-    SaturatingCnt<BITS> LSHT[1 << L];
-    BranchPredictor* BPs[2];
+    SaturatingCnt<BITS> LSHT[1 << L];   // 分支历史表
+    BranchPredictor* BPs[2];            // 子预测器
 
     public:
         TournamentPredictor_LSH(BranchPredictor* BP0, BranchPredictor* BP1)
@@ -443,22 +442,21 @@ int main(int argc, char * argv[])
 {
     // TODO: New your Predictor below.
     // BP = new BHTPredictor<20>();
-    BP = new GlobalHistoryPredictor<20, 2>();
-    // ????????????????????????H&HL
-    // BP = new LocalHistoryPredictor<19, 19>();
-    // BP = new BiModeHistoryPredictor<19, 19>();
+    // BP = new GlobalHistoryPredictor<20, 20>();
+    // BP = new LocalHistoryPredictor<20, 20>();
+    // BP = new BiModeHistoryPredictor<20, 20>();
 
     // Tournament predictor: Select output by global selection history
-    // BranchPredictor* BP0 = new BHTPredictor<19>();
-    // BranchPredictor* BP0 = new LocalHistoryPredictor<19, 19>();
-    // BranchPredictor* BP1 = new GlobalHistoryPredictor<19, 19>();
-    // BP = new TournamentPredictor_GSH<>(BP0, BP1);
+    BranchPredictor* BP0 = new BHTPredictor<20>();
+    // BranchPredictor* BP0 = new LocalHistoryPredictor<20, 20>();
+    BranchPredictor* BP1 = new GlobalHistoryPredictor<20, 20>();
+    BP = new TournamentPredictor_GSH<>(BP0, BP1);
 
     // Tournament predictor: Select output by local selection history
-    // BranchPredictor* BP0 = new BHTPredictor<19>();
-    // BranchPredictor* BP0 = new LocalHistoryPredictor<19, 19>();
-    // BranchPredictor* BP1 = new GlobalHistoryPredictor<19, 19>();
-    // BP = new TournamentPredictor_LSH<19>(BP0, BP1);
+    // BranchPredictor* BP0 = new BHTPredictor<20>();
+    // BranchPredictor* BP0 = new LocalHistoryPredictor<20, 20>();
+    // BranchPredictor* BP1 = new GlobalHistoryPredictor<20, 20>();
+    // BP = new TournamentPredictor_LSH<20>(BP0, BP1);
 
     // Initialize pin
     if (PIN_Init(argc, argv)) return Usage();

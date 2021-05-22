@@ -21,9 +21,9 @@ static UINT64 addrUnpredict = 0;
 
 typedef struct predict_result
 {
-    BOOL taken;
-    BOOL valid;
-    ADDRINT targetAddr;
+    BOOL taken; // 是否跳转
+    BOOL valid; // 分支目标地址是否有效
+    ADDRINT targetAddr; // 分支目标地址预测
 } PredictResult;
 
 template <size_t N, UINT64 init = (1 << N)/2 - 1>   // N < 64
@@ -351,7 +351,7 @@ class BiModeHistoryPredictor: public BranchPredictor
             UINT64 directionTag = truncate(addr ^ GHR.getVal(), L);
             UINT64 chooseTag = truncate(addr, L);
             BOOL chooseTaken = choosePHT[chooseTag].isTaken();
-            BOOL chooseUpdate = !(takenActually != chooseTaken && takenActually == takenPredicted);
+            BOOL chooseUpdate = !(takenActually != chooseTaken && takenActually == predicted.taken);
 
             // GHR
             GHR.shiftIn(takenActually);
@@ -468,20 +468,20 @@ class TournamentPredictor_GSH: public BranchPredictor
 
         void update(BOOL takenActually, ADDRINT addrActually, PredictResult predicted, ADDRINT addr)
         {
-            BOOL result[2];
+            PredictResult result[2];
             result[0] = BPs[0]->predict(addr);
             result[1] = BPs[1]->predict(addr);
 
             // BPs update
-            BPs[0]->update(takenActually, result[0], addr);
-            BPs[1]->update(takenActually, result[1], addr);
+            BPs[0]->update(takenActually, addrActually, result[0], addr);
+            BPs[1]->update(takenActually, addrActually,  result[1], addr);
 
             // GSHR update
-            if(result[0] == takenActually && result[1] != takenActually)
+            if(result[0].taken == takenActually && result[1].taken != takenActually)
             {
                 GSHR.decrease();
             }
-            else if(result[0] != takenActually && result[1] == takenActually)
+            else if(result[0].taken != takenActually && result[1].taken == takenActually)
             {
                 GSHR.increase();
             }
@@ -518,20 +518,20 @@ class TournamentPredictor_LSH: public BranchPredictor
         void update(BOOL takenActually, ADDRINT addrActually, PredictResult predicted, ADDRINT addr)
         {
             UINT64 Tag = truncate(addr, L);
-            BOOL result[2];
+            PredictResult result[2];
             result[0] = BPs[0]->predict(addr);
             result[1] = BPs[1]->predict(addr);
 
             // BPs update
-            BPs[0]->update(takenActually, result[0], addr);
-            BPs[1]->update(takenActually, result[1], addr);
+            BPs[0]->update(takenActually, addrActually, result[0], addr);
+            BPs[1]->update(takenActually, addrActually,  result[1], addr);
 
             // LSHT update
-            if(result[0] == takenActually && result[1] != takenActually)
+            if(result[0].taken == takenActually && result[1].taken != takenActually)
             {
                 LSHT[Tag].decrease();
             }
-            else if(result[0] != takenActually && result[1] == takenActually)
+            else if(result[0].taken != takenActually && result[1].taken == takenActually)
             {
                 LSHT[Tag].increase();
             }
@@ -595,6 +595,7 @@ VOID Fini(int, VOID * v)
 {
 	double precision = 100 * double(takenCorrect + notTakenCorrect) / (takenCorrect + notTakenCorrect + takenIncorrect + notTakenIncorrect);
     double addrPrecision = 100 * double(addrCorrect) / (addrCorrect + addrIncorrect + addrUnpredict);
+    double addrInPrecision = 100 * double(addrIncorrect) / (addrCorrect + addrIncorrect + addrUnpredict);
 
     cout << "takenCorrect: " << takenCorrect << endl
     	<< "takenIncorrect: " << takenIncorrect << endl
@@ -604,7 +605,8 @@ VOID Fini(int, VOID * v)
         << "addrCorrect: " << addrCorrect << endl
         << "addrIncorrect: " << addrIncorrect << endl
         << "addrUnpredict: " << addrUnpredict << endl
-        << "addrPrecision: " << addrPrecision << endl;
+        << "addrPrecision: " << addrPrecision << endl
+        << "addrInPrecision: " << addrInPrecision << endl;
     
     OutFile.setf(ios::showbase);
     OutFile << "takenCorrect: " << takenCorrect << endl
@@ -615,7 +617,7 @@ VOID Fini(int, VOID * v)
         << "addrCorrect: " << addrCorrect << endl
         << "addrIncorrect: " << addrIncorrect << endl
         << "addrUnpredict: " << addrUnpredict << endl
-        << "addrPrecision: " << addrPrecision << endl;
+        << "addrInPrecision: " << addrInPrecision << endl;
     
     OutFile.close();
 }
@@ -639,24 +641,23 @@ INT32 Usage()
 
 int main(int argc, char * argv[])
 {
-    // 19?????!!!!!!!!!!!!
     // TODO: New your Predictor below.
-    BP = new BHTPredictor<19>();
-    // BP = new GlobalHistoryPredictor<19, 19>();
-    // BP = new LocalHistoryPredictor<19, 19>();
-    // BP = new BiModeHistoryPredictor<19, 19>();
+    // BP = new BHTPredictor<20>();
+    // BP = new GlobalHistoryPredictor<20, 20>();
+    // BP = new LocalHistoryPredictor<20, 20>();
+    BP = new BiModeHistoryPredictor<20, 20>();
 
     // Tournament predictor: Select output by global selection history
-    // BranchPredictor* BP0 = new BHTPredictor<19>();
-    // BranchPredictor* BP0 = new LocalHistoryPredictor<19, 19>();
-    // BranchPredictor* BP1 = new GlobalHistoryPredictor<19, 19>();
+    // BranchPredictor* BP0 = new BHTPredictor<20>();
+    // BranchPredictor* BP0 = new LocalHistoryPredictor<20, 20>();
+    // BranchPredictor* BP1 = new GlobalHistoryPredictor<20, 20>();
     // BP = new TournamentPredictor_GSH<>(BP0, BP1);
 
     // Tournament predictor: Select output by local selection history
-    // BranchPredictor* BP0 = new BHTPredictor<19>();
-    // BranchPredictor* BP0 = new LocalHistoryPredictor<19, 19>();
-    // BranchPredictor* BP1 = new GlobalHistoryPredictor<19, 19>();
-    // BP = new TournamentPredictor_LSH<19>(BP0, BP1);
+    // BranchPredictor* BP0 = new BHTPredictor<20>();
+    // BranchPredictor* BP0 = new LocalHistoryPredictor<20, 20>();
+    // BranchPredictor* BP1 = new GlobalHistoryPredictor<20, 20>();
+    // BP = new TournamentPredictor_LSH<20>(BP0, BP1);
 
     // Initialize pin
     if (PIN_Init(argc, argv)) return Usage();
