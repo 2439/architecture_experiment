@@ -15,9 +15,8 @@ static UINT64 takenCorrect = 0;
 static UINT64 takenIncorrect = 0;
 static UINT64 notTakenCorrect = 0;
 static UINT64 notTakenIncorrect = 0;
-static UINT64 addrCorrect = 0;
-static UINT64 addrIncorrect = 0;
-static UINT64 addrUnpredict = 0;
+static UINT64 addrTakenCorrect = 0;
+static UINT64 addrTakenIncorrect = 0;
 
 typedef struct predict_result
 {
@@ -108,14 +107,7 @@ class BHTPredictor: public BranchPredictor
 
             ret.taken = counter[Tag].isTaken();
             ret.valid = counter[Tag].getValid();
-            if(ret.valid)
-            {
-                ret.targetAddr = counter[Tag].getAddr();
-            }
-            else
-            {
-                ret.targetAddr = 0;
-            }
+            ret.targetAddr = counter[Tag].getAddr();
             return ret;
         }
 
@@ -151,8 +143,6 @@ class BHTPredictor: public BranchPredictor
                 if(takenActually)
                 {
                     counter[Tag].setValid();
-                    counter[Tag].reset();
-                    counter[Tag].increase();
                     counter[Tag].setAddr(addrActually);
                 }
             }
@@ -176,15 +166,7 @@ class GlobalHistoryPredictor: public BranchPredictor
             
             ret.taken = bhist[Tag].isTaken();
             ret.valid = bhist[Tag].getValid();
-            if(ret.valid)
-            {
-                ret.targetAddr = bhist[Tag].getAddr();
-            }
-            else
-            {
-                ret.targetAddr = 0;
-            }
-            
+            ret.targetAddr = bhist[Tag].getAddr();
             return ret;
         }
 
@@ -221,8 +203,6 @@ class GlobalHistoryPredictor: public BranchPredictor
                 if(takenActually)
                 {
                     bhist[Tag].setValid();
-                    bhist[Tag].reset();
-                    bhist[Tag].increase();
                     bhist[Tag].setAddr(addrActually);
                 }
             }
@@ -246,15 +226,7 @@ class LocalHistoryPredictor: public BranchPredictor
 
         ret.taken = bhist[Tag].isTaken();
         ret.valid = bhist[Tag].getValid();
-        if(ret.valid)
-        {
-            ret.targetAddr = bhist[Tag].getAddr();
-        }
-        else
-        {
-            ret.targetAddr = 0;
-        }
-        
+        ret.targetAddr = bhist[Tag].getAddr();
         return ret;
     }
 
@@ -291,8 +263,6 @@ class LocalHistoryPredictor: public BranchPredictor
             if(takenActually)
             {
                 bhist[Tag].setValid();
-                bhist[Tag].reset();
-                bhist[Tag].increase();
                 bhist[Tag].setAddr(addrActually);
             }
         }
@@ -320,28 +290,14 @@ class BiModeHistoryPredictor: public BranchPredictor
             {
                 ret.taken = directionTPHT[directionTag].isTaken();
                 ret.valid = directionTPHT[directionTag].getValid();
-                if(ret.valid)
-                {
-                    ret.targetAddr = directionTPHT[directionTag].getAddr();
-                }
-                else
-                {
-                    ret.targetAddr = 0;
-                }
+                ret.targetAddr = directionTPHT[directionTag].getAddr();
             }
             // 选择方向表2
             else
             {
                 ret.taken = directionNTPHT[directionTag].isTaken();
                 ret.valid = directionNTPHT[directionTag].getValid();
-                if(ret.valid)
-                {
-                    ret.targetAddr = directionNTPHT[directionTag].getAddr();
-                }
-                else
-                {
-                    ret.targetAddr = 0;
-                }
+                ret.targetAddr = directionNTPHT[directionTag].getAddr();
             }
             return ret;
         }
@@ -407,8 +363,6 @@ class BiModeHistoryPredictor: public BranchPredictor
                     if(takenActually)
                     {
                         directionTPHT[directionTag].setValid();
-                        directionTPHT[directionTag].reset();
-                        directionTPHT[directionTag].increase();
                         directionTPHT[directionTag].setAddr(addrActually);
                     }
                 }
@@ -427,8 +381,6 @@ class BiModeHistoryPredictor: public BranchPredictor
                     if(takenActually)
                     {
                         directionNTPHT[directionTag].setValid();
-                        directionNTPHT[directionTag].reset();
-                        directionNTPHT[directionTag].increase();
                         directionNTPHT[directionTag].setAddr(addrActually);
                     }
                 }
@@ -539,9 +491,9 @@ class TournamentPredictor_LSH: public BranchPredictor
 };
 
 // This function is called every time a control-flow instruction is encountered
-void predictBranch(ADDRINT pc, BOOL direction)
+void predictBranch(ADDRINT pc, BOOL direction, ADDRINT targetAddr)
 {
-    ADDRINT targetAddr = IARG_BRANCH_TARGET_ADDR;
+    // ADDRINT targetAddr = IARG_BRANCH_TARGET_ADDR;
     PredictResult prediction = BP->predict(pc);
     BP->update(direction, targetAddr, prediction, pc);
 
@@ -560,17 +512,16 @@ void predictBranch(ADDRINT pc, BOOL direction)
             notTakenCorrect++;
     }
 
-    if(prediction.valid == false)
+    if(prediction.taken)
     {
-        addrUnpredict++;
-    }
-    else if(targetAddr == prediction.targetAddr)
-    {
-        addrCorrect++;
-    }
-    else
-    {
-        addrIncorrect++;
+        if(prediction.valid && targetAddr == prediction.targetAddr && direction)
+        {
+            addrTakenCorrect++;
+        }
+        else
+        {
+            addrTakenIncorrect++;
+        }
     }
 }
 
@@ -580,10 +531,10 @@ void Instruction(INS ins, void * v)
     if (INS_IsControlFlow(ins) && INS_HasFallThrough(ins))
     {
         INS_InsertCall(ins, IPOINT_TAKEN_BRANCH, (AFUNPTR)predictBranch,
-                        IARG_INST_PTR, IARG_BOOL, TRUE, IARG_END);
+                        IARG_INST_PTR, IARG_BOOL, TRUE, IARG_BRANCH_TARGET_ADDR, IARG_END);
 
         INS_InsertCall(ins, IPOINT_AFTER, (AFUNPTR)predictBranch,
-                        IARG_INST_PTR, IARG_BOOL, FALSE, IARG_END);
+                        IARG_INST_PTR, IARG_BOOL, FALSE, IARG_BRANCH_TARGET_ADDR, IARG_END);
     }
 }
 
@@ -594,19 +545,16 @@ KNOB<string> KnobOutputFile(KNOB_MODE_WRITEONCE, "pintool", "o", "brchPredict.tx
 VOID Fini(int, VOID * v)
 {
 	double precision = 100 * double(takenCorrect + notTakenCorrect) / (takenCorrect + notTakenCorrect + takenIncorrect + notTakenIncorrect);
-    double addrPrecision = 100 * double(addrCorrect) / (addrCorrect + addrIncorrect + addrUnpredict);
-    double addrInPrecision = 100 * double(addrIncorrect) / (addrCorrect + addrIncorrect + addrUnpredict);
+    double addrPrecision = 100 * double(addrTakenCorrect) / (addrTakenCorrect + addrTakenIncorrect);
 
     cout << "takenCorrect: " << takenCorrect << endl
     	<< "takenIncorrect: " << takenIncorrect << endl
     	<< "notTakenCorrect: " << notTakenCorrect << endl
     	<< "nnotTakenIncorrect: " << notTakenIncorrect << endl
     	<< "Precision: " << precision << endl
-        << "addrCorrect: " << addrCorrect << endl
-        << "addrIncorrect: " << addrIncorrect << endl
-        << "addrUnpredict: " << addrUnpredict << endl
-        << "addrPrecision: " << addrPrecision << endl
-        << "addrInPrecision: " << addrInPrecision << endl;
+        << "addrTakenCorrect: " << addrTakenCorrect << endl
+    	<< "addrTakenIncorrect: " << addrTakenIncorrect << endl
+        << "addrPrecision: " << addrPrecision << endl;
     
     OutFile.setf(ios::showbase);
     OutFile << "takenCorrect: " << takenCorrect << endl
@@ -614,10 +562,9 @@ VOID Fini(int, VOID * v)
     	<< "notTakenCorrect: " << notTakenCorrect << endl
     	<< "nnotTakenIncorrect: " << notTakenIncorrect << endl
     	<< "Precision: " << precision << endl
-        << "addrCorrect: " << addrCorrect << endl
-        << "addrIncorrect: " << addrIncorrect << endl
-        << "addrUnpredict: " << addrUnpredict << endl
-        << "addrInPrecision: " << addrInPrecision << endl;
+        << "addrTakenCorrect: " << addrTakenCorrect << endl
+    	<< "addrTakenIncorrect: " << addrTakenIncorrect << endl
+        << "addrPrecision: " << addrPrecision << endl;
     
     OutFile.close();
 }
