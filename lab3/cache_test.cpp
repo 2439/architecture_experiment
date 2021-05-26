@@ -130,11 +130,12 @@ int L1_DCache_Block() {
 	//add your own code
 
 	// set
-	int test_times = 11451490;
+	int test_times = 11451;
+	int test_times_count = L1_cache_size;
 	int array_size = (1 << 13);		// array start from 8KB
 	int block_size_begin = 4;		// block size test from 4B ~ 128B
-	int block_size_count = 6;
-	int average_time[6];
+	int block_size_count = 7;
+	int average_time[7];
 
 	// tmp
 	unsigned int block_size_tmp = block_size_begin;
@@ -145,17 +146,30 @@ int L1_DCache_Block() {
 	// grap bigger
 	for(int i=0; i<block_size_count; i++)
 	{
+		cout << i << " " << block_size_tmp << endl;
+		Clear_L1_Cache();
+		Clear_L2_Cache();	
+		array_size = L1_cache_size << 1;
 		// test time
 		start = clock();
 		// array_size bigger
-		for(array_size = 13; array_size < ARRAY_SIZE; array_size <<= 1)
+		for(int j=0; j<test_times; j++)
 		{
-			for(unsigned int j=0; j<test_times; j++)
+			location = 0;
+			for(int k=0; k<test_times_count; k++)
 			{
 				test_char = array[location];
 				location = (location + block_size_tmp) % array_size;
 			}
 		}
+//		for(; array_size <= L2_cache_size; array_size <<= 1)
+//		{
+//			for(unsigned int j=0; j<test_times; j++)
+//			{
+//				test_char = array[location];
+//				location = (location + block_size_tmp) % array_size;
+//			}
+//		}
 		finish = clock();
 		average_time[i] = finish - start;
 		block_size_tmp = block_size_tmp << 1;
@@ -166,11 +180,12 @@ int L1_DCache_Block() {
 	for(int i=0; i<block_size_count; i++)
 	{
 		cout << "block_size:" << block_size_tmp << " B ";
-		cout << "average time:" << average_time[i] << "ms" << endl;
-		if(i < block_size_count - 1)
+		cout << "average time:" << average_time[i] << "ms ";
+		if(i > 0)
 		{
-			
+			cout << average_time[i] - average_time[i-1];
 		}
+		cout << endl;
 		block_size_tmp = block_size_tmp << 1;		
 	}
 }
@@ -204,8 +219,8 @@ void Check_Swap_Method() {
 int main() {
 	SetPriorityClass(GetCurrentProcess(), REALTIME_PRIORITY_CLASS);
 	SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
-	L1_cache_size = L1_DCache_Size();
-	L2_cache_size = L2_Cache_Size();
+//	L1_cache_size = L1_DCache_Size();
+//	L2_cache_size = L2_Cache_Size();
 	L1_cache_block = L1_DCache_Block();
 	L2_cache_block = L2_Cache_Block();
 	L1_way_count = L1_DCache_Way_Count();
